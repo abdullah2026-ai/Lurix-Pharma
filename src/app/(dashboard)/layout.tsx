@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { SidebarProvider, useSidebar } from "@/context/SidebarContext";
 import { DashboardSidebar } from "@/components/layout/DashboardSidebar";
 import { Loader2 } from "lucide-react";
 
 function ProtectedDashboardShell({ children }: { children: React.ReactNode }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isSidebarOpen, closeSidebar } = useSidebar();
   const { firebaseUser, userProfile, loading } = useAuth();
   const router = useRouter();
 
@@ -23,9 +24,9 @@ function ProtectedDashboardShell({ children }: { children: React.ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F2F5F3] flex flex-col items-center justify-center gap-3">
+      <div className="min-h-screen bg-[#F0F4F2] flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-8 h-8 text-brand-700 animate-spin" />
-        <p className="text-xs font-semibold text-emerald-900/70 tracking-wide">
+        <p className="text-xs font-semibold text-emerald-950/70 tracking-wide">
           Verifying Pharmacy Credentials...
         </p>
       </div>
@@ -37,14 +38,14 @@ function ProtectedDashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#F2F5F3] flex">
+    <div className="min-h-screen bg-[#F0F4F2] flex">
+      {/* Sidebar Component with Context Support */}
       <DashboardSidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        isOpen={isSidebarOpen}
+        onClose={closeSidebar}
       />
 
       <div className="flex-1 flex flex-col min-w-0 lg:pl-64 transition-all duration-300">
-        {/* Pass sidebar toggler via data attribute or standard events */}
         {children}
       </div>
     </div>
@@ -54,7 +55,9 @@ function ProtectedDashboardShell({ children }: { children: React.ReactNode }) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <ProtectedDashboardShell>{children}</ProtectedDashboardShell>
+      <SidebarProvider>
+        <ProtectedDashboardShell>{children}</ProtectedDashboardShell>
+      </SidebarProvider>
     </AuthProvider>
   );
 }

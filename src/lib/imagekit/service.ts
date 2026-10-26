@@ -87,6 +87,41 @@ export async function uploadMedicineImage(
 }
 
 /**
+ * Uploads a user profile avatar to ImageKit in `/pharmacy/avatars/`
+ * Avatar is resized to 400×400 square (center-crop) then encoded as WebP.
+ */
+export async function uploadUserAvatar(
+  buffer: Buffer,
+  fileName: string
+): Promise<OptimizedUploadResult> {
+  const ik = getImageKitClient();
+
+  const optimizedBuffer = await sharp(buffer)
+    .resize({ width: 400, height: 400, fit: "cover", position: "centre" })
+    .webp({ quality: 85, effort: 4 })
+    .toBuffer();
+
+  const cleanName = fileName.replace(/\.[^/.]+$/, "") + "-avatar.webp";
+
+  const response = await ik.upload({
+    file: optimizedBuffer,
+    fileName: cleanName,
+    folder: "/pharmacy/avatars/",
+    useUniqueFileName: true,
+    tags: ["avatar", "user-profile", "pharmacy-app"],
+  });
+
+  return {
+    url: response.url,
+    fileId: response.fileId,
+    name: response.name,
+    size: response.size,
+    width: response.width,
+    height: response.height,
+  };
+}
+
+/**
  * Safely deletes an asset from ImageKit
  */
 export async function deleteImageKitFile(fileId: string): Promise<boolean> {

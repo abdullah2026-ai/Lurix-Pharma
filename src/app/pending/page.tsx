@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, RefreshCw, LogOut, CheckCircle2, Shield } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -12,12 +12,18 @@ export default function PendingApprovalPage() {
   const [checking, setChecking] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    if (userProfile?.status === "Active") {
+      router.push("/dashboard");
+    }
+  }, [userProfile, router]);
+
   const handleCheckStatus = async () => {
     setChecking(true);
-    await refreshSession();
+    const updated = await refreshSession();
     setChecking(false);
 
-    if (userProfile?.status === "Active") {
+    if (updated?.status === "Active" || userProfile?.status === "Active") {
       toast.success("Congratulations! Your account has been approved.");
       router.push("/dashboard");
     } else {

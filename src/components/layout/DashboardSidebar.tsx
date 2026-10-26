@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { 
   LayoutDashboard, 
@@ -14,11 +15,18 @@ import {
   LogOut, 
   X, 
   Pill,
-  ShieldCheck,
-  Building2
+  ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { APP_CONFIG } from "@/lib/constants";
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -28,6 +36,7 @@ interface SidebarProps {
 export function DashboardSidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { userProfile, signOut, hasPermission } = useAuth();
+  const photoUrl = (userProfile as any)?.photoUrl as string | null | undefined;
 
   const NAV_ITEMS = [
     {
@@ -37,19 +46,19 @@ export function DashboardSidebar({ isOpen, onClose }: SidebarProps) {
       permission: "view_dashboard" as const,
     },
     {
-      label: "Products & Stock",
+      label: "Products",
       href: "/medicines",
       icon: Package,
       permission: "view_stock" as const,
     },
     {
-      label: "New Sale / POS",
+      label: "Sales (POS)",
       href: "/pos",
       icon: ShoppingCart,
       permission: "manage_sales" as const,
     },
     {
-      label: "Daily Accounts",
+      label: "Orders & Accounts",
       href: "/accounts",
       icon: DollarSign,
       permission: "manage_accounts" as const,
@@ -61,32 +70,25 @@ export function DashboardSidebar({ isOpen, onClose }: SidebarProps) {
       permission: "view_reports" as const,
     },
     {
-      label: "Staff & Approvals",
+      label: "Staff & RBAC",
       href: "/users",
       icon: Users,
       permission: "manage_users" as const,
       adminOnly: true,
     },
     {
-      label: "Audit Trail",
+      label: "Audit Logs",
       href: "/audit",
       icon: History,
       adminOnly: true,
+      badge: "STRICT",
     },
     {
       label: "Settings",
       href: "/settings",
       icon: Settings,
-      permission: "manage_settings" as const,
     },
   ];
-
-  const filteredNav = NAV_ITEMS.filter((item) => {
-    if (userProfile?.role === "SuperAdmin") return true;
-    if (item.adminOnly && userProfile?.role !== "Admin") return false;
-    if (item.permission && !hasPermission(item.permission)) return false;
-    return true;
-  });
 
   return (
     <>
@@ -94,95 +96,140 @@ export function DashboardSidebar({ isOpen, onClose }: SidebarProps) {
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden transition-opacity"
         />
       )}
 
-      {/* Sidebar Container */}
+      {/* Main Sidebar Shell */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-64 bg-[#0C332A] text-emerald-100 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        className={`fixed top-0 bottom-0 left-0 z-50 w-64 flex flex-col transition-transform duration-300 ease-in-out border-r border-[#2A0E0E]/80 ${
+          isOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full lg:translate-x-0"
         }`}
+        style={{ background: "linear-gradient(180deg, #140808 0%, #1A0A0A 60%, #0E0505 100%)" }}
       >
-        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-5 space-y-6">
-          {/* Header & Brand */}
-          <div className="flex items-center justify-between px-1">
-            <Link href="/dashboard" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-brand-400 flex items-center justify-center text-brand-950 font-bold shadow-md transition-transform group-hover:scale-105">
-                <Pill className="w-5 h-5 -rotate-45" />
+        {/* Top Header: Brand Logo */}
+        <div className="p-6 pb-4 flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-3 group">
+            {/* Red pill icon badge */}
+            <div className="w-10 h-10 rounded-2xl bg-[#DC2626] flex items-center justify-center shadow-lg shadow-red-900/40 group-hover:scale-105 transition-transform">
+              <Pill className="w-5 h-5 text-white rotate-45" />
+            </div>
+            <div>
+              <div className="text-lg font-black text-white tracking-wide">
+                Lurix Pharma
               </div>
-              <div className="flex flex-col">
-                <span className="font-bold text-lg text-white tracking-wide">
-                  {APP_CONFIG.shortName}
-                </span>
-                <span className="text-[10px] text-emerald-300/70 font-medium">
-                  Asia/Dhaka • BDT (৳)
-                </span>
+              <div className="text-[9px] font-extrabold tracking-widest text-[#DC2626] uppercase">
+                Bangladesh
+              </div>
+            </div>
+          </Link>
+
+          {/* Close button for Mobile Drawer */}
+          <button
+            onClick={onClose}
+            className="lg:hidden p-2 rounded-xl text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Public Landing Link Pill */}
+        <div className="px-5 pb-3">
+          <Link
+            href="/"
+            target="_blank"
+            className="flex items-center justify-between px-3.5 py-2 rounded-2xl bg-[#1F0D0D] hover:bg-[#2A1010] border border-[#3A1515] text-xs font-semibold text-[#C08888] transition-all group"
+          >
+            <div className="flex items-center gap-2">
+              <ExternalLink className="w-3.5 h-3.5 text-[#DC2626]" />
+              <span>Visit Landing Page</span>
+            </div>
+            <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-[#DC2626]/20 text-[#FF6666] border border-[#DC2626]/30 uppercase tracking-wide">
+              Public
+            </span>
+          </Link>
+        </div>
+
+        {/* Divider */}
+        <div className="mx-5 mb-2 border-t border-[#2A0E0E]" />
+
+        {/* Navigation Links Scrollable List */}
+        <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+
+            // Permission filter
+            if (item.adminOnly && userProfile?.role !== "SuperAdmin" && userProfile?.role !== "Admin") {
+              return null;
+            }
+            if (item.permission && !hasPermission(item.permission)) {
+              return null;
+            }
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => {
+                  if (window.innerWidth < 1024) onClose();
+                }}
+                className={`flex items-center justify-between px-4 py-3 rounded-2xl font-bold text-xs transition-all ${
+                  isActive
+                    ? "bg-[#DC2626] text-white shadow-lg shadow-red-900/40 translate-x-1"
+                    : "text-[#A07070] hover:text-white hover:bg-[#2D1010]"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-[#905050]"}`} />
+                  <span>{item.label}</span>
+                </div>
+
+                {item.badge && (
+                  <span
+                    className={`px-1.5 py-0.5 text-[8px] font-extrabold rounded-md uppercase tracking-wider ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-[#3A1010] text-[#FF7070] border border-[#DC2626]/30"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Bottom User Card */}
+        <div className="p-4 border-t border-[#2A0E0E]">
+          <div className="p-3 rounded-2xl bg-[#1F0D0D] border border-[#3A1515] flex items-center justify-between">
+            <Link href="/settings" className="flex items-center gap-2.5 overflow-hidden flex-1 group">
+              <div className="relative w-8 h-8 rounded-xl overflow-hidden bg-[#140808] border border-[#DC2626]/40 flex-shrink-0 flex items-center justify-center text-[10px] font-bold text-white">
+                {photoUrl ? (
+                  <Image src={photoUrl} alt="avatar" fill sizes="32px" className="object-cover" />
+                ) : (
+                  <span>{userProfile?.displayName ? getInitials(userProfile.displayName) : "U"}</span>
+                )}
+                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-[#DC2626] ring-1 ring-[#140808]" />
+              </div>
+              <div className="truncate">
+                <div className="text-xs font-bold text-white truncate group-hover:text-[#FF7070] transition-colors">
+                  {userProfile?.displayName || "Pharmacist"}
+                </div>
+                <div className="text-[10px] text-[#DC2626] font-semibold uppercase tracking-wider">
+                  {userProfile?.role || "Staff"}
+                </div>
               </div>
             </Link>
 
-            {/* Close Button on Mobile */}
             <button
-              onClick={onClose}
-              className="lg:hidden p-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-emerald-800/60 transition-colors"
-              aria-label="Close Sidebar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1.5 flex-1 text-sm font-medium">
-            {filteredNav.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => {
-                    if (window.innerWidth < 1024) onClose();
-                  }}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-2xl transition-all duration-200 ${
-                    isActive
-                      ? "bg-brand-400 text-brand-950 font-bold shadow-md"
-                      : "text-emerald-200/80 hover:bg-emerald-900/60 hover:text-white"
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-brand-950" : "text-emerald-300"}`} />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-
-          {/* Bottom Profile and Pro Card */}
-          <div className="pt-4 border-t border-emerald-900/60 space-y-4">
-            {/* Status Card */}
-            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-emerald-900/80 to-[#08221B] border border-emerald-700/30 text-xs space-y-1.5">
-              <div className="flex items-center justify-between text-brand-300 font-semibold text-[11px]">
-                <span className="flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  {userProfile?.role || "Employee"}
-                </span>
-                <span className="w-2 h-2 rounded-full bg-brand-400 animate-pulse" />
-              </div>
-              <p className="text-white font-medium truncate">{userProfile?.displayName || userProfile?.email}</p>
-              {userProfile?.maxDiscountPercent ? (
-                <p className="text-[10px] text-emerald-300/60">
-                  Discount cap: {userProfile.maxDiscountPercent}% (or ৳{userProfile.maxDiscountFixed})
-                </p>
-              ) : null}
-            </div>
-
-            {/* Logout Button */}
-            <button
-              onClick={signOut}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-emerald-300/80 hover:text-white hover:bg-emerald-900/50 rounded-xl transition-colors"
+              onClick={() => signOut()}
+              className="p-1.5 rounded-xl text-[#905050] hover:text-red-400 hover:bg-white/5 transition-colors ml-1"
+              title="Sign Out"
             >
               <LogOut className="w-4 h-4" />
-              <span>Sign Out Shift</span>
             </button>
           </div>
         </div>

@@ -2,9 +2,10 @@
 
 import { useState, useRef } from "react";
 import Image from "next/image";
-import { Upload, X, RefreshCw, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Upload, X, RefreshCw, Loader2, ZoomIn } from "lucide-react";
 import { toast } from "sonner";
 import { auth } from "@/lib/firebase/client";
+import imageCompression from "browser-image-compression";
 
 interface ImageUploadDropzoneProps {
   currentImageUrl?: string;
@@ -12,7 +13,22 @@ interface ImageUploadDropzoneProps {
   onImageUploaded: (result: { url: string; fileId: string }) => void;
   onImageRemoved: () => void;
   disabled?: boolean;
+  label?: string;
 }
+
+/**
+ * Client-side image compression options using browser-image-compression.
+ * Reduces file size before sending to the server, saving bandwidth and
+ * improving upload speed. The server still applies Sharp for format
+ * conversion and final optimization.
+ */
+const COMPRESSION_OPTIONS: Parameters<typeof imageCompression>[1] = {
+  maxSizeMB: 1.5,          // compress to max 1.5MB before upload
+  maxWidthOrHeight: 1400,  // downscale large images
+  useWebWorker: true,      // non-blocking compression
+  fileType: "image/webp",  // convert to WebP in browser too
+  initialQuality: 0.82,
+};
 
 export function ImageUploadDropzone({
   currentImageUrl,
@@ -20,9 +36,11 @@ export function ImageUploadDropzone({
   onImageUploaded,
   onImageRemoved,
   disabled = false,
+  label = "medicine photo",
 }: ImageUploadDropzoneProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [compressionProgress, setCompressionProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -33,29 +51,39 @@ export function ImageUploadDropzone({
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size cannot exceed 5MB");
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error("File size cannot exceed 20MB");
       return;
     }
 
     try {
       setIsUploading(true);
 
-      // Get Firebase ID token
+      // Step 1: Client-side compression via browser-image-compression
+      setCompressionProgress("Compressing image in browser...");
+      const compressedFile = await imageCompression(file, {
+        ...COMPRESSION_OPTIONS,
+        onProgress: (progress) => {
+          setCompressionProgress(`Compressing... ${progress}%`);
+        },
+      });
+
+      setCompressionProgress("Uploading to ImageKit...");
+
+      // Step 2: Get Firebase auth token
       const user = auth?.currentUser;
       const token = user ? await user.getIdToken() : "";
 
+      // Step 3: Upload compressed file
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", compressedFile, file.name);
       if (currentImageFileId) {
         formData.append("oldFileId", currentImageFileId);
       }
 
       const res = await fetch("/api/upload", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
@@ -64,16 +92,19 @@ export function ImageUploadDropzone({
         throw new Error(data.error || "Failed to upload image");
       }
 
-      toast.success("Medicine image uploaded and optimized via Sharp!");
-      onImageUploaded({
-        url: data.image.url,
-        fileId: data.image.fileId,
-      });
+      const originalKB = Math.round(file.size / 1024);
+      const compressedKB = Math.round(compressedFile.size / 1024);
+      toast.success(
+        `Image uploaded! Compressed ${originalKB}KB → ${compressedKB}KB (${Math.round((1 - compressedKB / originalKB) * 100)}% saved)`
+      );
+
+      onImageUploaded({ url: data.image.url, fileId: data.image.fileId });
     } catch (err: any) {
       console.error(err);
       toast.error(err.message || "Failed to upload image");
     } finally {
       setIsUploading(false);
+      setCompressionProgress(null);
     }
   };
 
@@ -81,20 +112,14 @@ export function ImageUploadDropzone({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFile(e.dataTransfer.files[0]);
-    }
+    if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
   };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
   };
 
   const handleRemove = async () => {
@@ -117,9 +142,9 @@ export function ImageUploadDropzone({
         body: JSON.stringify({ fileId: currentImageFileId }),
       });
 
-      toast.success("Image removed from cloud storage");
+      toast.success("Image removed");
       onImageRemoved();
-    } catch (err: any) {
+    } catch {
       toast.error("Failed to delete image asset");
     } finally {
       setIsUploading(false);
@@ -131,38 +156,41 @@ export function ImageUploadDropzone({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png, image/jpeg, image/webp"
+        accept="image/png, image/jpeg, image/webp, image/gif"
         className="hidden"
         onChange={(e) => {
-          if (e.target.files && e.target.files[0]) {
-            handleFile(e.target.files[0]);
-          }
+          if (e.target.files?.[0]) handleFile(e.target.files[0]);
+          // Reset so re-selecting same file triggers onChange
+          e.target.value = "";
         }}
         disabled={disabled || isUploading}
       />
 
       {currentImageUrl ? (
         <div className="relative rounded-2xl overflow-hidden border border-emerald-950/10 shadow-neu-sm bg-white p-2">
-          <div className="relative w-full h-44 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+          <div className="relative w-full h-44 rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center group">
             <Image
               src={currentImageUrl}
-              alt="Medicine preview"
+              alt="Image preview"
               fill
-              className="object-contain"
+              className="object-contain transition-transform duration-300 group-hover:scale-105"
               sizes="(max-width: 768px) 100vw, 300px"
             />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <ZoomIn className="w-6 h-6 text-white drop-shadow" />
+            </div>
           </div>
 
           <div className="flex items-center justify-between pt-2 px-1 text-xs">
-            <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded">
-              ImageKit WebP Optimized
+            <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              ✓ Compressed + WebP via ImageKit
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={disabled || isUploading}
-                className="px-2.5 py-1 text-xs font-semibold text-brand-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1"
+                className="px-2.5 py-1 text-xs font-semibold text-brand-900 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors flex items-center gap-1 border border-emerald-200"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Replace
               </button>
@@ -184,8 +212,8 @@ export function ImageUploadDropzone({
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-          className={`h-40 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-all ${
+          onClick={() => !isUploading && fileInputRef.current?.click()}
+          className={`h-40 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-4 text-center transition-all cursor-pointer ${
             dragActive
               ? "border-brand-500 bg-brand-50/60 scale-[0.99]"
               : "border-gray-300 hover:border-brand-600 bg-white shadow-neu-sm"
@@ -195,7 +223,7 @@ export function ImageUploadDropzone({
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="w-8 h-8 text-brand-600 animate-spin" />
               <p className="text-xs font-medium text-gray-600">
-                Optimizing with Sharp & uploading to ImageKit...
+                {compressionProgress || "Processing..."}
               </p>
             </div>
           ) : (
@@ -205,10 +233,10 @@ export function ImageUploadDropzone({
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-800">
-                  Click to upload or drag & drop medicine photo
+                  Click to upload or drag &amp; drop {label}
                 </p>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  PNG, JPG, WebP up to 5MB (Auto-compressed to WebP)
+                  PNG, JPG, WebP, GIF up to 20MB (auto-compressed before upload)
                 </p>
               </div>
             </div>

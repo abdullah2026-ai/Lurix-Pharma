@@ -85,6 +85,8 @@ export interface IUserProfile {
   permissions: Permission[];
   maxDiscountPercent: number; // e.g. 10%
   maxDiscountFixed: number; // e.g. 500 ৳
+  photoUrl?: string;       // ImageKit CDN URL for avatar
+  photoFileId?: string;    // ImageKit file ID for deletion
   createdAt: Date;
   updatedAt: Date;
 }

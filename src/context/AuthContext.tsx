@@ -13,7 +13,7 @@ interface AuthContextType {
   loading: boolean;
   hasPermission: (permission: Permission) => boolean;
   signOut: () => Promise<void>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<IUserProfile | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,7 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   hasPermission: () => false,
   signOut: async () => {},
-  refreshSession: async () => {},
+  refreshSession: async () => null,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const fetchSession = async (user: User) => {
+  const fetchSession = async (user: User): Promise<IUserProfile | null> => {
     try {
       const token = await user.getIdToken(true);
       const res = await fetch("/api/auth/session", {
@@ -43,14 +43,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!res.ok) {
         setUserProfile(null);
-        return;
+        return null;
       }
 
       const data = await res.json();
       setUserProfile(data.user);
+      return data.user as IUserProfile;
     } catch (err) {
       console.error("Failed to fetch session profile:", err);
       setUserProfile(null);
+      return null;
     }
   };
 
@@ -89,10 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   };
 
-  const refreshSession = async () => {
+  const refreshSession = async (): Promise<IUserProfile | null> => {
     if (firebaseUser) {
-      await fetchSession(firebaseUser);
+      return await fetchSession(firebaseUser);
     }
+    return null;
   };
 
   return (

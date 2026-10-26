@@ -50,6 +50,8 @@ export async function GET(request: NextRequest) {
         permissions: user.permissions || [],
         maxDiscountPercent: user.maxDiscountPercent || 0,
         maxDiscountFixed: user.maxDiscountFixed || 0,
+        photoUrl: user.photoUrl || null,
+        photoFileId: user.photoFileId || null,
       },
     });
   } catch (error: any) {
